@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:run_to_beat/coordinate.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 void main() {
@@ -52,8 +53,10 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
+  bool _isRunning = false;
 
-  List<List<double>>? _accelerometerValues;
+  final List<Coordinate> _accelerometerValues = List.empty(growable: true);
+  List<Coordinate>? _stepsValues;
   List<double>? _userAccelerometerValues;
   List<double>? _gyroscopeValues;
   List<double>? _magnetometerValues;
@@ -70,6 +73,62 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  void _toggleRunning() {
+    setState(() {
+      _isRunning = !_isRunning;
+
+      if (!_isRunning) {
+        _streamSubscriptions.add(
+          accelerometerEvents.listen(
+            (AccelerometerEvent event) {
+              setState(() {
+                // _accelerometerValues ??= <List<double>>[];
+                // _accelerometerValues?.add(<double>[event.x, event.y, event.z]);
+                _accelerometerValues.add(Coordinate(event.x, event.y, event.z));
+                _accelerometerValues.removeWhere((element) => element.dateTime
+                    .add(const Duration(minutes: 1))
+                    .isBefore(DateTime.now()));
+
+                _stepsValues = _accelerometerValues.
+              });
+            },
+          ),
+        );
+        _streamSubscriptions.add(
+          gyroscopeEvents.listen(
+            (GyroscopeEvent event) {
+              setState(() {
+                _gyroscopeValues = <double>[event.x, event.y, event.z];
+              });
+            },
+          ),
+        );
+        _streamSubscriptions.add(
+          userAccelerometerEvents.listen(
+            (UserAccelerometerEvent event) {
+              setState(() {
+                _userAccelerometerValues = <double>[event.x, event.y, event.z];
+              });
+            },
+          ),
+        );
+        _streamSubscriptions.add(
+          magnetometerEvents.listen(
+            (MagnetometerEvent event) {
+              setState(() {
+                _magnetometerValues = <double>[event.x, event.y, event.z];
+              });
+            },
+          ),
+        );
+      } else {
+        for (final subscription in _streamSubscriptions) {
+          subscription.cancel();
+        }
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // This method is rerun every time setState is called, for instance as done
@@ -78,9 +137,11 @@ class _MyHomePageState extends State<MyHomePage> {
     // The Flutter framework has been optimized to make rerunning build methods
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
-    final List<String>? accelerometer = _accelerometerValues?.last
-        .map((double v) => v.toStringAsFixed(1))
-        .toList();
+    final String? accelerometer = _accelerometerValues.isNotEmpty
+        ? _accelerometerValues.last.toString()
+        : null;
+    // .map((double v) => v.toStringAsFixed(1))
+    // .toList();
     final gyroscope =
         _gyroscopeValues?.map((double v) => v.toStringAsFixed(1)).toList();
     final userAccelerometer = _userAccelerometerValues
@@ -162,60 +223,22 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+          onPressed: _toggleRunning,
+          tooltip: 'Increment',
+          child: _isRunning
+              ? const Icon(Icons.play_arrow)
+              : const Icon(Icons.pause) // const Icon(Icons.add),
+          ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 
   @override
   void dispose() {
     super.dispose();
-    for (final subscription in _streamSubscriptions) {
-      subscription.cancel();
-    }
   }
 
   @override
   void initState() {
     super.initState();
-    _streamSubscriptions.add(
-      accelerometerEvents.listen(
-        (AccelerometerEvent event) {
-          setState(() {
-            _accelerometerValues ??= <List<double>>[];
-            _accelerometerValues?.add(<double>[event.x, event.y, event.z]);
-          });
-        },
-      ),
-    );
-    _streamSubscriptions.add(
-      gyroscopeEvents.listen(
-        (GyroscopeEvent event) {
-          setState(() {
-            _gyroscopeValues = <double>[event.x, event.y, event.z];
-          });
-        },
-      ),
-    );
-    _streamSubscriptions.add(
-      userAccelerometerEvents.listen(
-        (UserAccelerometerEvent event) {
-          setState(() {
-            _userAccelerometerValues = <double>[event.x, event.y, event.z];
-          });
-        },
-      ),
-    );
-    _streamSubscriptions.add(
-      magnetometerEvents.listen(
-        (MagnetometerEvent event) {
-          setState(() {
-            _magnetometerValues = <double>[event.x, event.y, event.z];
-          });
-        },
-      ),
-    );
   }
 }
