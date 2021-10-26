@@ -1,8 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:run_to_beat/coordinate.dart';
-import 'package:sensors_plus/sensors_plus.dart';
+import 'package:pedometer/pedometer.dart';
 
 void main() {
   runApp(const MyApp());
@@ -53,78 +54,38 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
-  bool _isRunning = false;
+  late bool _isRunning;
 
-  final List<Coordinate> _accelerometerValues = List.empty(growable: true);
-  List<Coordinate>? _stepsValues;
-  List<double>? _userAccelerometerValues;
-  List<double>? _gyroscopeValues;
-  List<double>? _magnetometerValues;
-  final _streamSubscriptions = <StreamSubscription<dynamic>>[];
+  late Stream<StepCount> _stepCountStream;
+  String _steps = '?';
 
-  void _incrementCounter() {
+  void onStepCount(StepCount event) {
+    print(event);
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _steps = event.steps.toString();
     });
   }
 
-  void _toggleRunning() {
+  void onStepCountError(error) {
+    print('onStepCountError: $error');
     setState(() {
-      _isRunning = !_isRunning;
+      _steps = 'Step Count not available';
+    });
+  }
 
+  void _toggleRunning() async {
+    var status = await Permission.activityRecognition.status;
+    var grantedState = await Permission.activityRecognition.request().isGranted;
+    setState(() {
       if (!_isRunning) {
-        _streamSubscriptions.add(
-          accelerometerEvents.listen(
-            (AccelerometerEvent event) {
-              setState(() {
-                // _accelerometerValues ??= <List<double>>[];
-                // _accelerometerValues?.add(<double>[event.x, event.y, event.z]);
-                _accelerometerValues.add(Coordinate(event.x, event.y, event.z));
-                _accelerometerValues.removeWhere((element) => element.dateTime
-                    .add(const Duration(minutes: 1))
-                    .isBefore(DateTime.now()));
-
-                _stepsValues = _accelerometerValues.
-              });
-            },
-          ),
-        );
-        _streamSubscriptions.add(
-          gyroscopeEvents.listen(
-            (GyroscopeEvent event) {
-              setState(() {
-                _gyroscopeValues = <double>[event.x, event.y, event.z];
-              });
-            },
-          ),
-        );
-        _streamSubscriptions.add(
-          userAccelerometerEvents.listen(
-            (UserAccelerometerEvent event) {
-              setState(() {
-                _userAccelerometerValues = <double>[event.x, event.y, event.z];
-              });
-            },
-          ),
-        );
-        _streamSubscriptions.add(
-          magnetometerEvents.listen(
-            (MagnetometerEvent event) {
-              setState(() {
-                _magnetometerValues = <double>[event.x, event.y, event.z];
-              });
-            },
-          ),
-        );
-      } else {
-        for (final subscription in _streamSubscriptions) {
-          subscription.cancel();
+        _isRunning = true;
+        if (grantedState) {
+          // can listen stream.
+          _stepCountStream.listen(onStepCount).onError(onStepCountError);
         }
+      } else {
+        _isRunning = false;
+        print("damn");
       }
     });
   }
@@ -137,18 +98,6 @@ class _MyHomePageState extends State<MyHomePage> {
     // The Flutter framework has been optimized to make rerunning build methods
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
-    final String? accelerometer = _accelerometerValues.isNotEmpty
-        ? _accelerometerValues.last.toString()
-        : null;
-    // .map((double v) => v.toStringAsFixed(1))
-    // .toList();
-    final gyroscope =
-        _gyroscopeValues?.map((double v) => v.toStringAsFixed(1)).toList();
-    final userAccelerometer = _userAccelerometerValues
-        ?.map((double v) => v.toStringAsFixed(1))
-        .toList();
-    final magnetometer =
-        _magnetometerValues?.map((double v) => v.toStringAsFixed(1)).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -188,34 +137,7 @@ class _MyHomePageState extends State<MyHomePage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  Text('Accelerometer: $accelerometer'),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text('UserAccelerometer: $userAccelerometer'),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text('Gyroscope: $gyroscope'),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text('Magnetometer: $magnetometer'),
+                  Text('Steps: $_steps'),
                 ],
               ),
             ),
@@ -226,8 +148,8 @@ class _MyHomePageState extends State<MyHomePage> {
           onPressed: _toggleRunning,
           tooltip: 'Increment',
           child: _isRunning
-              ? const Icon(Icons.play_arrow)
-              : const Icon(Icons.pause) // const Icon(Icons.add),
+              ? const Icon(Icons.pause)
+              : const Icon(Icons.play_arrow) // const Icon(Icons.add),
           ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
@@ -240,5 +162,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    _stepCountStream = Pedometer.stepCountStream;
+    _isRunning = false;
   }
 }
