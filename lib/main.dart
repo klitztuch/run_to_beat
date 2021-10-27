@@ -1,8 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
 import 'package:permission_handler/permission_handler.dart';
-import 'package:run_to_beat/coordinate.dart';
+import 'package:run_to_beat/step_status.dart';
 import 'package:pedometer/pedometer.dart';
 
 void main() {
@@ -53,28 +54,37 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
   late bool _isRunning;
 
   late Stream<StepCount> _stepCountStream;
-  String _steps = '?';
+  late List<StepStatus> _steps;
+  String _currentSteps = '?';
+  String _stepsPerMinute = '?';
 
   void onStepCount(StepCount event) {
     print(event);
     setState(() {
-      _steps = event.steps.toString();
+      _currentSteps = event.steps.toString();
+      _steps.add(StepStatus(event.timeStamp, event.steps));
+      List<int> lastMinuteSteps = _steps
+          .where((element) => element.dateTime
+              .isAfter(DateTime.now().add(const Duration(minutes: -1))))
+          .map((e) => e.steps)
+          .toList();
+      _stepsPerMinute =
+          (lastMinuteSteps.last - lastMinuteSteps.first).toString();
     });
   }
 
   void onStepCountError(error) {
     print('onStepCountError: $error');
     setState(() {
-      _steps = 'Step Count not available';
+      _currentSteps = 'Step Count not available';
+      _stepsPerMinute = 'NaN';
     });
   }
 
   void _toggleRunning() async {
-    var status = await Permission.activityRecognition.status;
     var grantedState = await Permission.activityRecognition.request().isGranted;
     setState(() {
       if (!_isRunning) {
@@ -85,6 +95,7 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       } else {
         _isRunning = false;
+        _stepCountStream.listen(onStepCount).cancel();
         print("damn");
       }
     });
@@ -125,19 +136,28 @@ class _MyHomePageState extends State<MyHomePage> {
           // horizontal).
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text(
-              'You have clicked the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
+            // const Text(
+            //   'You have clicked the button this many times:',
+            // ),
+            // Text(
+            //   '$_counter',
+            //   style: Theme.of(context).textTheme.headline4,
+            // ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  Text('Steps: $_currentSteps'),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  Text('Steps: $_steps'),
+                  Text('Steps per Minute: $_stepsPerMinute'),
                 ],
               ),
             ),
@@ -163,6 +183,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     _stepCountStream = Pedometer.stepCountStream;
+    _steps = List.empty(growable: true);
     _isRunning = false;
   }
 }
